@@ -1,0 +1,22 @@
+{
+  "name": "chrome-metamask-scan",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "scan": "node scanWithBalances.js",
+    "filter": "node filterWallets.js",
+    "debug": "node debug.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "Scan MetaMask wallets from Brave browser profiles",
+  "dependencies": {
+    "level": "^8.0.0",
+    "@metamask/browser-passworder": "^4.3.0",
+    "ethers": "^6.13.0",
+    "axios": "^1.7.0"
+  }
+}

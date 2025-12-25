@@ -1,0 +1,16 @@
+node_modules/
+*.log
+.DS_Store
+.env
+wallets.txt
+output.txt
+wallet_balances.json
+wallet_balances_arc.json
+wallets_with_balance.json
+wallets_with_balance_arc.json
+wallet_*.json
+wallets_*.json
+
+solana/node_modules
+solana/wallet_*.json
+solana/wallets_*.json
