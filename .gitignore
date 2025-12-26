@@ -4,13 +4,19 @@ node_modules/
 .env
 wallets.txt
 output.txt
+
+# EVM cache files
 wallet_balances.json
 wallet_balances_arc.json
 wallets_with_balance.json
 wallets_with_balance_arc.json
+
+# Solana cache files
+solana_wallet_balances.json
+solana_wallet_balances_arc.json
+solana_wallets_with_balance.json
+solana_wallets_with_balance_arc.json
+
+# Generic patterns
 wallet_*.json
 wallets_*.json
-
-solana/node_modules
-solana/wallet_*.json
-solana/wallets_*.json

