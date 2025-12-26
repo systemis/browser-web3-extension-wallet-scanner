@@ -173,7 +173,8 @@ function displayResults(results) {
 }
 
 async function main() {
-  const password = process.argv[2];
+  const extension = process.argv.find(arg => arg.startsWith('password'))
+  const password = extension ? extension.split('=')[1] : process.argv[1];
   const skipFetch = process.argv.includes('--skip-fetch');
   const forceRescan = process.argv.includes('--force');
 

@@ -13,13 +13,13 @@ npm install
 ### EVM Wallets (MetaMask)
 
 ```bash
-npm run scan "your-password"
+npm run scan -- --password=your-password
 ```
 
 ### Solana Wallets (Phantom)
 
 ```bash
-npm run scan:solana "your-password"
+npm run scan:solana -- --password=your-password
 ```
 
 ### All Commands
