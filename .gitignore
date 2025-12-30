@@ -20,3 +20,5 @@ solana_wallets_with_balance_arc.json
 # Generic patterns
 wallet_*.json
 wallets_*.json
+
+batch*
