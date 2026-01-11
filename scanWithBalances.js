@@ -131,17 +131,34 @@ function displayResultsSolana(results) {
 
       // SPL tokens
       if (wallet.balances.splTokens && wallet.balances.splTokens.length > 0) {
-        console.log(`\n  SPL Tokens (${wallet.balances.splTokens.length}):`);
-        wallet.balances.splTokens.slice(0, 10).forEach(token => {
-          const symbol = token.symbol || 'UNKNOWN';
-          const name = token.name || 'Unknown Token';
-          console.log(`    ${symbol}: ${parseFloat(token.balance).toFixed(6)}`);
-          if (name !== symbol) {
-            console.log(`      (${name})`);
+        const tokensWithValue = wallet.balances.splTokens.filter(t => t.usd && t.usd > 0);
+        const tokensWithoutValue = wallet.balances.splTokens.filter(t => !t.usd || t.usd === 0);
+
+        console.log(`\n  SPL Tokens (${wallet.balances.splTokens.length} total):`);
+
+        // Show tokens with USD value first
+        if (tokensWithValue.length > 0) {
+          console.log(`\n    Tokens with USD value (${tokensWithValue.length}):`);
+          tokensWithValue.slice(0, 10).forEach(token => {
+            const symbol = token.symbol || 'UNKNOWN';
+            const usdValue = token.usd ? ` ($${token.usd.toFixed(2)})` : '';
+            console.log(`      ${symbol}: ${parseFloat(token.balance).toFixed(6)}${usdValue}`);
+          });
+          if (tokensWithValue.length > 10) {
+            console.log(`      ... and ${tokensWithValue.length - 10} more with value`);
           }
-        });
-        if (wallet.balances.splTokens.length > 10) {
-          console.log(`    ... and ${wallet.balances.splTokens.length - 10} more`);
+        }
+
+        // Show tokens without USD value (collapsed)
+        if (tokensWithoutValue.length > 0) {
+          console.log(`\n    Other tokens (${tokensWithoutValue.length} - no price data):`);
+          tokensWithoutValue.slice(0, 5).forEach(token => {
+            const symbol = token.symbol || 'UNKNOWN';
+            console.log(`      ${symbol}: ${parseFloat(token.balance).toFixed(6)}`);
+          });
+          if (tokensWithoutValue.length > 5) {
+            console.log(`      ... and ${tokensWithoutValue.length - 5} more`);
+          }
         }
       }
 

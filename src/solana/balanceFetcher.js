@@ -41,29 +41,78 @@ let priceCache = {};
 let priceCacheTime = 0;
 const PRICE_CACHE_DURATION = 60000; // 1 minute
 
+// Well-known token mint addresses for major SPL tokens
+const KNOWN_TOKENS = {
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': { symbol: 'USDC', coingeckoId: 'usd-coin' },
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': { symbol: 'USDT', coingeckoId: 'tether' },
+  'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So': { symbol: 'mSOL', coingeckoId: 'msol' },
+  'So11111111111111111111111111111111111111112': { symbol: 'SOL', coingeckoId: 'solana' },
+  'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263': { symbol: 'BONK', coingeckoId: 'bonk' },
+  '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs': { symbol: 'ETH', coingeckoId: 'ethereum' },
+  'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm': { symbol: 'WIF', coingeckoId: 'dogwifcoin' },
+  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN': { symbol: 'JUP', coingeckoId: 'jupiter-exchange-solana' },
+  '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr': { symbol: 'POPCAT', coingeckoId: 'popcat' },
+  'hntyVP6YFm1Hg25TN9WGLqM12b1TRezMtjegh2cN4z': { symbol: 'RAY', coingeckoId: 'raydium' },
+  'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL': { symbol: 'JTO', coingeckoId: 'jito-governance-token' },
+  '5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm': { symbol: 'INF', coingeckoId: 'socean-staked-sol' },
+};
+
+/**
+ * Fetch token prices from CoinGecko (batch)
+ */
+async function fetchTokenPrices(tokenIds) {
+  const now = Date.now();
+
+  // Return cached prices if still valid
+  const cachedPrices = {};
+  const uncachedIds = [];
+
+  for (const id of tokenIds) {
+    if (priceCache[id] && now - priceCacheTime < PRICE_CACHE_DURATION) {
+      cachedPrices[id] = priceCache[id];
+    } else {
+      uncachedIds.push(id);
+    }
+  }
+
+  // If all prices are cached, return them
+  if (uncachedIds.length === 0) {
+    return cachedPrices;
+  }
+
+  try {
+    const idsParam = uncachedIds.join(',');
+    const response = await axios.get(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${idsParam}&vs_currencies=usd`,
+      { timeout: 10000 }
+    );
+
+    // Update cache
+    for (const id of uncachedIds) {
+      const price = response.data[id]?.usd || 0;
+      priceCache[id] = price;
+      cachedPrices[id] = price;
+    }
+
+    priceCacheTime = now;
+    return cachedPrices;
+  } catch (error) {
+    console.error('Error fetching token prices:', error.message);
+
+    // Return cached prices even if expired, or 0 for new tokens
+    for (const id of uncachedIds) {
+      cachedPrices[id] = priceCache[id] || 0;
+    }
+    return cachedPrices;
+  }
+}
+
 /**
  * Fetch SOL price from CoinGecko
  */
 async function fetchSOLPrice() {
-  const now = Date.now();
-
-  if (now - priceCacheTime < PRICE_CACHE_DURATION && priceCache.sol) {
-    return priceCache.sol;
-  }
-
-  try {
-    const response = await axios.get(
-      'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd',
-      { timeout: 10000 }
-    );
-
-    priceCache.sol = response.data.solana?.usd || 0;
-    priceCacheTime = now;
-    return priceCache.sol;
-  } catch (error) {
-    console.error('Error fetching SOL price:', error.message);
-    return priceCache.sol || 0;
-  }
+  const prices = await fetchTokenPrices(['solana']);
+  return prices['solana'] || 0;
 }
 
 /**
@@ -105,7 +154,7 @@ export async function getSOLBalance(address) {
 }
 
 /**
- * Get SPL token balances
+ * Get SPL token balances with enhanced metadata and pricing
  */
 export async function getSPLTokenBalances(address) {
   try {
@@ -126,29 +175,62 @@ export async function getSPLTokenBalances(address) {
 
       // Only include tokens with non-zero balance
       if (parseFloat(tokenAmount.uiAmount) > 0) {
-        balances.push({
-          mint: parsedInfo.mint,
+        const mint = parsedInfo.mint;
+        const token = {
+          mint,
           balance: tokenAmount.uiAmount.toString(),
           decimals: tokenAmount.decimals,
           raw: tokenAmount.amount,
           tokenAccount: accountInfo.pubkey.toBase58()
-        });
+        };
+
+        // Check if this is a known token
+        if (KNOWN_TOKENS[mint]) {
+          token.symbol = KNOWN_TOKENS[mint].symbol;
+          token.name = KNOWN_TOKENS[mint].symbol;
+          token.coingeckoId = KNOWN_TOKENS[mint].coingeckoId;
+        } else {
+          // Try to fetch metadata for unknown tokens
+          try {
+            const metadata = await fetchTokenMetadata(mint, connection);
+            if (metadata) {
+              token.symbol = metadata.symbol || 'UNKNOWN';
+              token.name = metadata.name || 'Unknown Token';
+            } else {
+              token.symbol = 'UNKNOWN';
+              token.name = mint.substring(0, 8) + '...';
+            }
+          } catch (e) {
+            token.symbol = 'UNKNOWN';
+            token.name = mint.substring(0, 8) + '...';
+          }
+        }
+
+        balances.push(token);
       }
     }
 
-    // Try to fetch token metadata
-    for (const token of balances) {
-      try {
-        const metadata = await fetchTokenMetadata(token.mint, connection);
-        if (metadata) {
-          token.symbol = metadata.symbol || 'UNKNOWN';
-          token.name = metadata.name || 'Unknown Token';
+    // Fetch prices for known tokens
+    const tokensWithPrices = balances.filter(t => t.coingeckoId);
+    if (tokensWithPrices.length > 0) {
+      const coingeckoIds = [...new Set(tokensWithPrices.map(t => t.coingeckoId))];
+      const prices = await fetchTokenPrices(coingeckoIds);
+
+      for (const token of balances) {
+        if (token.coingeckoId && prices[token.coingeckoId]) {
+          token.price = prices[token.coingeckoId];
+          token.usd = parseFloat(token.balance) * token.price;
         }
-      } catch (e) {
-        token.symbol = 'UNKNOWN';
-        token.name = token.mint.substring(0, 8) + '...';
       }
     }
+
+    // Sort by USD value (highest first), then by balance
+    balances.sort((a, b) => {
+      if (a.usd && b.usd) return b.usd - a.usd;
+      if (a.usd) return -1;
+      if (b.usd) return 1;
+      return parseFloat(b.balance) - parseFloat(a.balance);
+    });
 
     return balances;
   } catch (error) {
@@ -285,14 +367,21 @@ export async function calculateUSDValue(balances) {
   const solPrice = await fetchSOLPrice();
   let totalUSD = 0;
 
+  // Calculate SOL value
   if (balances.sol && balances.sol.balance) {
     const solUSD = parseFloat(balances.sol.balance) * solPrice;
     balances.sol.usd = solUSD;
     totalUSD += solUSD;
   }
 
-  // For SPL tokens, we would need to fetch individual token prices
-  // This would require additional API calls to token price services
+  // Calculate SPL token values (already calculated in getSPLTokenBalances)
+  if (balances.splTokens && Array.isArray(balances.splTokens)) {
+    for (const token of balances.splTokens) {
+      if (token.usd) {
+        totalUSD += token.usd;
+      }
+    }
+  }
 
   return totalUSD;
 }
@@ -304,19 +393,32 @@ export async function fetchAllBalances(address) {
   console.log(`  Fetching SOL balance...`);
 
   try {
-    // Only fetch SOL balance to reduce API calls
-    // SPL tokens and NFTs require too many RPC calls and hit rate limits
+    // Fetch SOL balance
     const sol = await getSOLBalance(address);
+
+    console.log(`  Fetching SPL token balances...`);
+    // Fetch SPL token balances with pricing
+    const splTokens = await getSPLTokenBalances(address);
+
+    if (splTokens.length > 0) {
+      console.log(`  Found ${splTokens.length} SPL tokens`);
+      const tokensWithValue = splTokens.filter(t => t.usd && t.usd > 0.01);
+      if (tokensWithValue.length > 0) {
+        console.log(`  ${tokensWithValue.length} tokens with USD value`);
+      }
+    }
 
     const balances = {
       sol,
-      splTokens: [], // Skip to avoid rate limits
-      nfts: [] // Skip to avoid rate limits
+      splTokens,
+      nfts: [] // Skip NFTs as they require additional metadata calls
     };
 
     // Calculate total USD value
     const totalUSD = await calculateUSDValue(balances);
     balances.totalUSD = totalUSD;
+
+    console.log(`  Total USD value: $${totalUSD.toFixed(2)}`);
 
     return balances;
   } catch (error) {
