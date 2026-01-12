@@ -9,6 +9,7 @@
     "scan:solana": "node scanWithBalances.js --solana",
     "filter": "node filterWallets.js",
     "filter:solana": "node filterWallets.js --solana",
+    "export:spl": "node exportSolanaWithSPL.js",
     "debug": "node debug.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

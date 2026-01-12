@@ -4,7 +4,8 @@
       "Bash(npm install:*)",
       "Bash(npm run debug:*)",
       "Bash(npm run scan:*)",
-      "Bash(node debug-vault.js:*)"
+      "Bash(node debug-vault.js:*)",
+      "Bash(node debugPhantomVault.js:*)"
     ]
   }
 }

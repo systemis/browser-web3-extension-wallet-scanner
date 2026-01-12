@@ -22,3 +22,6 @@ wallet_*.json
 wallets_*.json
 
 batch*
+
+solana*.json
+phantom*.json
